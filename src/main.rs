@@ -14,20 +14,18 @@ use microbit::{
     gpio::MicrophonePins,
     hal::{
         prelude::*,
-        gpio::{Level, OpenDrainConfig},
+        gpio::{
+            Level,
+            OpenDrainConfig,
+            p0::P0_05,
+            Input,
+            Floating,
+        },
         Timer,
         pac::SAADC,
         Saadc,
         saadc::SaadcConfig,
     },
-};
-
-use microbit::{
-    hal::gpio::{
-        p0::P0_05,
-        Input,
-        Floating,
-    }
 };
 
 struct Microphone {
@@ -51,7 +49,7 @@ impl Microphone {
     }
 
     fn read(&mut self) -> Result<i16, Error<()>> {
-        Ok(self.saadc.read(&mut self.mic_in)?)
+        self.saadc.read(&mut self.mic_in)
     }
 }
 
