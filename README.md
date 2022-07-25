@@ -8,11 +8,19 @@ bar height is dB with some unspecified offset and scale.
 
 ## Build and Run
 
-You'll need to follow the instructions from the embedded
-micro:bit
+You can follow the instructions from the embedded micro:bit
 [*Discovery Book*](https://docs.rust-embedded.org/discovery/microbit/index.html)
-to set up your build environment.  Then you can just say
-`cargo embed` to flash and run this.
+to set up your build environment.  Then you can say
+
+    cargo embed --release
+
+to flash and run this.
+
+You can also follow the setup instructions in the `README`
+on the `microbit` crate
+[repo](https://github.com/nrf-rs/microbit). You can then say
+
+    cargo run --release
 
 ## License
 
