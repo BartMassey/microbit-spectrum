@@ -12,7 +12,7 @@ use microbit::{
     hal::{
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
-        saadc::{Gain, Oversample, Reference, Resistor, Resolution, SaadcConfig, Time},
+        saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc, Timer,
     },
 };
@@ -32,10 +32,8 @@ impl Microphone {
         let saadc_config = SaadcConfig {
             resolution: Resolution::_12BIT,
             oversample: Oversample::OVER4X,
-            reference: Reference::VDD1_4,
-            gain: Gain::GAIN1_4,
-            resistor: Resistor::BYPASS,
             time: Time::_40US,
+            ..SaadcConfig::default()
         };
         let saadc = Saadc::new(saadc, saadc_config);
         let mic_in = microphone_pins.mic_in.into_floating_input();
