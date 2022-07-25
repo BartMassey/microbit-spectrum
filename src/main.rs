@@ -96,13 +96,9 @@ fn main() -> ! {
         }
         range = (31.0 * range + peak) / 32.0;
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
-        // rprintln!("peak/range: {}, dc: {}, range{}", peak / range, dc, range);
-        let p0 = 0.5 * peak / range;
-        for a in 0..5 {
-            led_display[a][0] = (p0 > 0.2 * (4 - a) as f32) as u8;
-        }
-        for f in 1..5 {
-            let power = freqs[f + 1].norm() / 16.0;
+        // rprintln!("dc: {}, range{}", dc, range);
+        for f in 0..5 {
+            let power = freqs[f + 2].norm() / 16.0;
             // rprintln!("power[{}]: {}", f, power);
             for a in 0..5 {
                 led_display[a][f] = (power > 0.2 * (4 - a) as f32) as u8;
