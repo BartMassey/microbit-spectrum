@@ -62,9 +62,11 @@ fn main() -> ! {
     let mut sample_buf = [0.0f32; 32];
     let mut dc = 0.0f32;
     let mut peak = 0.0f32;
-    let mut cos_window = [0.0f32; 32];
-    for (n, w) in cos_window.iter_mut().enumerate() {
-        *w = (PI * (n as f32 + 1.0) / 34.0).sin();
+    let mut window = [0.0f32; 32];
+    // Use a Hann window, which is easy to compute and reasonably good.
+    for (n, w) in window.iter_mut().enumerate() {
+        let s = (PI * (n as f32 + 1.0) / 34.0).sin();
+        *w = s * s;
     }
 
     loop {
@@ -73,7 +75,7 @@ fn main() -> ! {
             dc = (7.0 * dc + sample) / 8.0;
             let sample = sample - dc;
             peak = peak.max(sample.abs());
-            *s = sample * cos_window[i] / peak;
+            *s = sample * window[i] / peak;
         }
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
