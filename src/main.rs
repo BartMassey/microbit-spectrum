@@ -3,40 +3,23 @@
 
 use core::f32::consts::PI;
 
-use num_complex::ComplexFloat;
-use nb::Error;
-use microfft::real::rfft_32;
-use panic_halt as _;
 use cortex_m_rt::entry;
 use microbit::{
     board::Board,
     display::blocking::Display,
     gpio::MicrophonePins,
+    hal::prelude::*,
     hal::{
-        prelude::*,
-        gpio::{
-            Level,
-            OpenDrainConfig,
-            p0::P0_05,
-            Input,
-            Floating,
-        },
-        Timer,
+        gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
-        Saadc,
-        saadc::{
-            SaadcConfig,
-            Resolution,
-            Oversample,
-            Reference,
-            Gain,
-            Resistor,
-            Time,
-        }
+        saadc::{Gain, Oversample, Reference, Resistor, Resolution, SaadcConfig, Time},
+        Saadc, Timer,
     },
 };
-
-// use rtt_target::{rprintln, rtt_init_print};
+use microfft::real::rfft_32;
+use nb::Error;
+use num_complex::ComplexFloat;
+use panic_halt as _;
 
 struct Microphone {
     saadc: Saadc,
@@ -81,7 +64,7 @@ fn main() -> ! {
     let mut sample_buf = [0.0f32; 32];
     let mut dc = 0.0f32;
     let mut peak = 0.0f32;
-    let mut cos_window  = [0.0f32; 32];
+    let mut cos_window = [0.0f32; 32];
     for (n, w) in cos_window.iter_mut().enumerate() {
         *w = (PI * (n as f32 + 1.0) / 34.0).sin();
     }
@@ -97,8 +80,8 @@ fn main() -> ! {
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
-            for a in 0..5 {
-                led_display[a][f] = (55.0 + power > 5.0 * (4.0 - a as f32)) as u8;
+            for (a, row) in led_display.iter_mut().enumerate() {
+                row[f] = (55.0 + power > 5.0 * (4.0 - a as f32)) as u8;
             }
         }
         display.show(&mut timer, led_display, 10);
