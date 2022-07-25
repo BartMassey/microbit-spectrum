@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use num_complex::ComplexFloat;
+
 use nb::Error;
 
 use microfft::real::rfft_32;
@@ -98,10 +100,10 @@ fn main() -> ! {
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
         // rprintln!("dc: {}, range{}", dc, range);
         for f in 0..5 {
-            let power = freqs[f + 2].norm() / 16.0;
+            let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
             // rprintln!("power[{}]: {}", f, power);
             for a in 0..5 {
-                led_display[a][f] = (power > 0.2 * (4 - a) as f32) as u8;
+                led_display[a][f] = (power > 0.2 * (5.0 - a as f32)) as u8;
             }
         }
         display.show(&mut timer, led_display, 10);
