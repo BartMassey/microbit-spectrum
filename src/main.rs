@@ -75,7 +75,6 @@ impl Microphone {
 
 #[entry]
 fn main() -> ! {
-    // rtt_init_print!();
     let board = Board::take().expect("board?");
     let mut timer = Timer::new(board.TIMER0);
     let mut display = Display::new(board.display_pins);
@@ -84,26 +83,21 @@ fn main() -> ! {
     let mut led_display = [[0; 5]; 5];
     let mut sample_buf = [0.0f32; 32];
     let mut dc = 0.0f32;
-    let mut range = 0.00001f32;
-    let mut peak: f32;
+    let mut peak = 0.0f32;
 
     loop {
-        peak = 0.0;
         for s in &mut sample_buf {
-            let sample = mic.read().expect("mic?") as f32 / 32768.0;
+            let sample = mic.read().expect("mic?") as f32 / 2048.0;
             dc = (7.0 * dc + sample) / 8.0;
             let sample = sample - dc;
-            peak = peak.max(sample);
-            *s = sample / range;
+            peak = peak.max(sample.abs());
+            *s = sample / peak;
         }
-        range = (31.0 * range + peak) / 32.0;
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
-        // rprintln!("dc: {}, range{}", dc, range);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
-            // rprintln!("power[{}]: {}", f, power);
             for a in 0..5 {
-                led_display[a][f] = (power > 0.2 * (5.0 - a as f32)) as u8;
+                led_display[a][f] = (55.0 + power > 5.0 * (4.0 - a as f32)) as u8;
             }
         }
         display.show(&mut timer, led_display, 10);
