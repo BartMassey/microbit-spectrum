@@ -1,16 +1,13 @@
 #![no_std]
 #![no_main]
 
+use core::f32::consts::PI;
+
 use num_complex::ComplexFloat;
-
 use nb::Error;
-
 use microfft::real::rfft_32;
-
 use panic_halt as _;
-
 use cortex_m_rt::entry;
-
 use microbit::{
     board::Board,
     display::blocking::Display,
@@ -84,14 +81,18 @@ fn main() -> ! {
     let mut sample_buf = [0.0f32; 32];
     let mut dc = 0.0f32;
     let mut peak = 0.0f32;
+    let mut cos_window  = [0.0f32; 32];
+    for (n, w) in cos_window.iter_mut().enumerate() {
+        *w = (PI * (n as f32 + 1.0) / 34.0).sin();
+    }
 
     loop {
-        for s in &mut sample_buf {
+        for (i, s) in sample_buf.iter_mut().enumerate() {
             let sample = mic.read().expect("mic?") as f32 / 2048.0;
             dc = (7.0 * dc + sample) / 8.0;
             let sample = sample - dc;
             peak = peak.max(sample.abs());
-            *s = sample / peak;
+            *s = sample * cos_window[i] / peak;
         }
         let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
