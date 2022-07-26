@@ -1,25 +1,30 @@
 #![no_std]
 #![no_main]
 
+use core::cell::RefCell;
 use core::f32::consts::PI;
 
+use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use microbit::{
     board::Board,
-    display::blocking::Display,
+    display::nonblocking::{Display, GreyscaleImage},
     gpio::MicrophonePins,
     hal::prelude::*,
     hal::{
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
         saadc::{Oversample, Resolution, SaadcConfig, Time},
-        Saadc, Timer,
+        Saadc,
     },
+    pac::{self, interrupt, TIMER0},
 };
 use microfft::real::rfft_32;
 use nb::Error;
 use num_complex::ComplexFloat;
 use panic_halt as _;
+
+static DISPLAY: Mutex<RefCell<Option<Display<TIMER0>>>> = Mutex::new(RefCell::new(None));
 
 struct Microphone {
     saadc: Saadc,
@@ -51,12 +56,29 @@ impl Microphone {
     }
 }
 
+#[interrupt]
+fn TIMER0() {
+    cortex_m::interrupt::free(|cs| {
+        if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
+            display.handle_display_event();
+        }
+    });
+}
+
 #[entry]
 fn main() -> ! {
-    let board = Board::take().expect("board?");
-    let mut timer = Timer::new(board.TIMER0);
-    let mut display = Display::new(board.display_pins);
+    let mut board = Board::take().expect("board?");
+
     let mut mic = Microphone::new(board.SAADC, board.microphone_pins);
+
+    let display = Display::new(board.TIMER0, board.display_pins);
+    cortex_m::interrupt::free(move |cs| {
+        *DISPLAY.borrow(cs).borrow_mut() = Some(display);
+    });
+    unsafe {
+        board.NVIC.set_priority(pac::Interrupt::TIMER0, 128);
+        pac::NVIC::unmask(pac::Interrupt::TIMER0);
+    }
 
     let mut led_display = [[0; 5]; 5];
     let mut sample_buf = [0.0f32; 32];
@@ -84,6 +106,10 @@ fn main() -> ! {
                 row[f] = (55.0 + power > 5.0 * (4.0 - a as f32)) as u8;
             }
         }
-        display.show(&mut timer, led_display, 10);
+        cortex_m::interrupt::free(|cs| {
+            if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
+                display.show(&GreyscaleImage::new(&led_display));
+            }
+        });
     }
 }

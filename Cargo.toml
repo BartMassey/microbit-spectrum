@@ -9,6 +9,10 @@ cortex-m-rt = "0.7.1"
 panic-halt = "0.2.0"
 nb = "1.0.0"
 
+[dependencies.cortex-m]
+version = "0.7.5"
+features = ["inline-asm"]
+
 [dependencies.num-complex]
 version = "0.4.2"
 default-features = false
