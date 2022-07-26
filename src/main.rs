@@ -21,7 +21,8 @@ use microbit::{
 };
 use microfft::real::rfft_32;
 use nb::Error;
-use num_complex::ComplexFloat;
+use num_complex::Complex;
+use num_traits::Float;
 use panic_halt as _;
 
 static DISPLAY: Mutex<RefCell<Option<Display<TIMER0>>>> = Mutex::new(RefCell::new(None));
@@ -99,13 +100,17 @@ fn main() -> ! {
             peak = peak.max(sample.abs());
             *s = sample * window[i] / peak;
         }
-        let freqs: &mut [num_complex::Complex<f32>; 16] = rfft_32(&mut sample_buf);
+        let freqs: &mut [Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
+            let target = (55.0 + power).floor() as u8;
             for (a, row) in led_display.iter_mut().enumerate() {
-                row[f] = (55.0 + power > 5.0 * (4.0 - a as f32)) as u8;
+                let threshold =  5 * (4 - a as u8);
+                let light = target - threshold;
+                row[f] = light.clamp(0, 9);
             }
         }
+
         cortex_m::interrupt::free(|cs| {
             if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
                 display.show(&GreyscaleImage::new(&led_display));
