@@ -17,7 +17,7 @@ use microbit::{
         saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc,
     },
-    pac::{self, interrupt, TIMER0},
+    pac::{self, Interrupt, interrupt, TIMER1},
 };
 use microfft::real::rfft_32;
 use nb::Error;
@@ -25,7 +25,7 @@ use num_complex::Complex;
 use num_traits::Float;
 use panic_halt as _;
 
-static DISPLAY: Mutex<RefCell<Option<Display<TIMER0>>>> = Mutex::new(RefCell::new(None));
+static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
 
 struct Microphone {
     saadc: Saadc,
@@ -58,7 +58,7 @@ impl Microphone {
 }
 
 #[interrupt]
-fn TIMER0() {
+fn TIMER1() {
     cortex_m::interrupt::free(|cs| {
         if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
             display.handle_display_event();
@@ -72,13 +72,13 @@ fn main() -> ! {
 
     let mut mic = Microphone::new(board.SAADC, board.microphone_pins);
 
-    let display = Display::new(board.TIMER0, board.display_pins);
+    let display = Display::new(board.TIMER1, board.display_pins);
     cortex_m::interrupt::free(move |cs| {
         *DISPLAY.borrow(cs).borrow_mut() = Some(display);
     });
     unsafe {
-        board.NVIC.set_priority(pac::Interrupt::TIMER0, 128);
-        pac::NVIC::unmask(pac::Interrupt::TIMER0);
+        board.NVIC.set_priority(Interrupt::TIMER1, 128);
+        pac::NVIC::unmask(Interrupt::TIMER1);
     }
 
     let mut led_display = [[0; 5]; 5];
@@ -103,10 +103,10 @@ fn main() -> ! {
         let freqs: &mut [Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
-            let target = (55.0 + power).floor() as u8;
+            let target = 55.0 + power.floor();
             for (a, row) in led_display.iter_mut().enumerate() {
-                let threshold =  5 * (4 - a as u8);
-                let light = target - threshold;
+                let threshold =  5.0 * (4.0 - a as f32);
+                let light = (target - threshold) as u8;
                 row[f] = light.clamp(0, 9);
             }
         }

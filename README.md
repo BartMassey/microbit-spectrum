@@ -22,6 +22,9 @@ on the `microbit` crate
 
     cargo run --release
 
+Note that this app requires `--release` to work properly:
+the FFT is just too slow otherwise.
+
 ## License
 
 This work is made available under the "MIT License". Please
