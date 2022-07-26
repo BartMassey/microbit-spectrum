@@ -103,11 +103,10 @@ fn main() -> ! {
         let freqs: &mut [Complex<f32>; 16] = rfft_32(&mut sample_buf);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 2].norm() / 16.0).log10();
-            let target = 55.0 + power.floor();
             for (a, row) in led_display.iter_mut().enumerate() {
-                let threshold =  5.0 * (4.0 - a as f32);
-                let light = (target - threshold) as u8;
-                row[f] = light.clamp(0, 9);
+                let threshold =  3.0 * (4.0 - a as f32) - 60.5;
+                let light = power - threshold;
+                row[f] = light.clamp(0.0, 9.0) as u8;
             }
         }
 
