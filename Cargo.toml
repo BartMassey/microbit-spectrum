@@ -26,4 +26,4 @@ features = ["libm"]
 [dependencies.microfft]
 version = "0.5.0"
 default-features = false
-features = ["size-32"]
+features = ["size-16"]
