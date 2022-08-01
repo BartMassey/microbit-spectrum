@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-microbit-v2 = "0.13.0"
 cortex-m-rt = "0.7.1"
 panic-halt = "0.2.0"
 nb = "1.0.0"
+
+[dependencies.microbit-v2]
+path = "/local/src/old/microbit/microbit-v2"
 
 [dependencies.cortex-m]
 version = "0.7.5"
