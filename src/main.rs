@@ -19,11 +19,13 @@ use microbit::{
     },
     pac::{self, Interrupt, interrupt, TIMER1},
 };
-use microfft::real::rfft_16;
 use nb::Error;
 use num_complex::Complex;
 use num_traits::Float;
 use panic_halt as _;
+
+const FFT_WIDTH: usize = 16;
+use microfft::real::rfft_16;
 
 static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
 
@@ -82,13 +84,13 @@ fn main() -> ! {
     }
 
     let mut led_display = [[0; 5]; 5];
-    let mut sample_buf = [0.0f32; 16];
+    let mut sample_buf = [0.0f32; FFT_WIDTH];
     let mut dc = 0.0f32;
     let mut peak = 0.0f32;
-    let mut window = [0.0f32; 32];
+    let mut window = [0.0f32; FFT_WIDTH];
     // Use a Hann window, which is easy to compute and reasonably good.
     for (n, w) in window.iter_mut().enumerate() {
-        let s = (PI * (n as f32 + 1.0) / 34.0).sin();
+        let s = (PI * (n as f32 + 0.5) / FFT_WIDTH as f32).sin();
         *w = s * s;
     }
 
@@ -100,7 +102,7 @@ fn main() -> ! {
             peak = peak.max(sample.abs());
             *s = sample * window[i] / peak;
         }
-        let freqs: &mut [Complex<f32>; 8] = rfft_16(&mut sample_buf);
+        let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft_16(&mut sample_buf);
         for f in 0..5 {
             let power = 20.0 * (freqs[f + 1].norm() / 16.0).log10();
             for (a, row) in led_display.iter_mut().enumerate() {
