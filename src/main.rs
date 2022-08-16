@@ -40,8 +40,8 @@ impl Microphone {
     fn new(saadc: SAADC, microphone_pins: MicrophonePins) -> Self {
         // initialize adc
         let saadc_config = SaadcConfig {
-            resolution: Resolution::_12BIT,
-            oversample: Oversample::OVER4X,
+            resolution: Resolution::_10BIT,
+            oversample: Oversample::OVER2X,
             time: Time::_40US,
             ..SaadcConfig::default()
         };
