@@ -118,7 +118,7 @@ fn main() -> ! {
     let mut window = [0.0f32; FFT_WIDTH];
     // Use a Hann window, which is easy to compute and reasonably good.
     for (n, w) in window.iter_mut().enumerate() {
-        let s = (PI * (n as f32 + 0.5) / FFT_WIDTH as f32).sin();
+        let s = f32::sin(PI * n as f32 / (FFT_WIDTH - 1) as f32);
         *w = s * s;
     }
 
