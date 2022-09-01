@@ -11,6 +11,10 @@ defmt-rtt = "0.3.2"
 defmt = "0.3.2"
 microbit-v2 = "0.13.0"
 
+[dependencies.ordered-float]
+version = "3.0.0"
+default_features = false
+
 [dependencies.rtt-target]
 version = "0.3.1"
 features = ["cortex-m"]
@@ -36,7 +40,7 @@ features = ["libm"]
 [dependencies.microfft]
 version = "0.5.0"
 default-features = false
-features = ["size-16"]
+features = ["size-64"]
 
 [features]
 

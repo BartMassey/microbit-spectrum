@@ -22,15 +22,24 @@ use microbit::{
 use nb::Error;
 use num_complex::Complex;
 use num_traits::Float;
+use ordered_float::NotNan;
 use panic_rtt_target as _;
 use rtt_target::rtt_init_print;
 #[cfg(not(feature = "defmt-default"))]
 use rtt_target::{rprint, rprintln};
 
-const FFT_WIDTH: usize = 16;
-use microfft::real::rfft_16 as rfft;
+const FFT_WIDTH: usize = 64;
+use microfft::real::rfft_64 as rfft;
 // 10 bits. See also below.
 const ADC_MAX: usize = 512;
+
+const BANDS: [(usize, usize); 5] = [
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (4, 7),
+    (8, 20),
+];
 
 static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
 
@@ -45,10 +54,10 @@ impl Microphone {
         let saadc_config = SaadcConfig {
             // Should match ADC_MAX above.
             resolution: Resolution::_10BIT,
-            oversample: Oversample::OVER2X,
             // Limited by resolution and sampling rate
             // including oversampling. See chip docs.
-            time: Time::_40US,
+            oversample: Oversample::OVER2X,
+            time: Time::_10US,
             ..SaadcConfig::default()
         };
         let saadc = Saadc::new(saadc, saadc_config);
@@ -128,10 +137,23 @@ fn main() -> ! {
             peak = peak.max(sample.abs());
             *s = sample * window[i] / peak;
         }
+
         let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
-        for f in 0..5 {
-            let db_power = freqs[f + 1].norm() * 2.0 / FFT_WIDTH as f32;
-            let power = 20.0 * db_power.log10();
+        let bandvals = BANDS
+            .into_iter()
+            .map(|(start, end)| {
+                freqs[start..end]
+                    .iter()
+                    .map(|&f| {
+                        let p = f.norm() / FFT_WIDTH as f32;
+                        NotNan::new(20.0 * p.log10()).unwrap()
+                    })
+                    .max()
+                    .unwrap()
+                    .into_inner()
+            });
+
+        for (f, power) in bandvals.enumerate() {
             for (a, row) in led_display.iter_mut().enumerate() {
                 let threshold =  -3.0 * a as f32 - 50.0;
                 let light = power - threshold;

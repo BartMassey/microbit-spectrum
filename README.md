@@ -2,10 +2,9 @@
 Bart Massey 2022
 
 This Rust app for the BBC micro:bit v2 uses its microphone
-to listen and displays spectral power. The spectral bar
-centers correspond very roughly to 375, 750, 1125, 1500, and
-1875 Hz.  The bar height is dB in unspecified units of audio
-power: the base LED is 60 dB and each successive LED is 3dB.
+to listen and displays spectral power. The spectral bars are
+set to cover five arbitrarily-chosen bands. The bar height
+is dB in unspecified units of audio power, with an offset.
 
 ## Build and Run
 
