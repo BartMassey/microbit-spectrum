@@ -146,7 +146,9 @@ fn main() -> ! {
                     .iter()
                     .map(|&f| {
                         let p = f.norm() / FFT_WIDTH as f32;
-                        NotNan::new(20.0 * p.log10()).unwrap()
+                        const MIN_DB: NotNan<f32> =
+                            unsafe { NotNan::new_unchecked(-120.0) };
+                        NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB)
                     })
                     .max()
                     .unwrap()
