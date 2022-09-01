@@ -11,6 +11,7 @@ use microbit::{
     display::nonblocking::{Display, GreyscaleImage},
     gpio::MicrophonePins,
     hal::{
+        prelude::*,
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
         saadc::{Oversample, Resolution, SaadcConfig, Time},
@@ -28,6 +29,8 @@ use rtt_target::{rprint, rprintln};
 
 const FFT_WIDTH: usize = 16;
 use microfft::real::rfft_16 as rfft;
+// 10 bits. See also below.
+const ADC_MAX: usize = 512;
 
 static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
 
@@ -40,8 +43,11 @@ impl Microphone {
     fn new(saadc: SAADC, microphone_pins: MicrophonePins) -> Self {
         // initialize adc
         let saadc_config = SaadcConfig {
+            // Should match ADC_MAX above.
             resolution: Resolution::_10BIT,
             oversample: Oversample::OVER2X,
+            // Limited by resolution and sampling rate
+            // including oversampling. See chip docs.
             time: Time::_40US,
             ..SaadcConfig::default()
         };
@@ -60,10 +66,15 @@ impl Microphone {
         let mut result = [0; FFT_WIDTH];
         #[cfg(feature="defmt-trace")]
         rprint!("starting read...");
-        //for i in 0..FFT_WIDTH {
-        //    self.saadc.read_mut(&mut self.mic_in, &mut result[i..i+1])?;
-        //}
+
+        #[cfg(feature = "adc-multiread")]
         self.saadc.read_mut(&mut self.mic_in, &mut result)?;
+
+        #[cfg(not(feature = "adc-multiread"))]
+        for r in &mut result {
+            *r = self.saadc.read(&mut self.mic_in)?;
+        }
+
         #[cfg(feature="defmt-trace")]
         rprintln!("read complete");
         Ok(result)
@@ -111,7 +122,7 @@ fn main() -> ! {
     loop {
         let samples = mic.read().expect("mic?");
         for (i, s) in sample_buf.iter_mut().enumerate() {
-            let sample = samples[i] as f32 / 2048.0;
+            let sample = samples[i] as f32 / ADC_MAX as f32;
             dc = (7.0 * dc + sample) / 8.0;
             let sample = sample - dc;
             peak = peak.max(sample.abs());
