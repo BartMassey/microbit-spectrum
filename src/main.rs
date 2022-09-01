@@ -10,14 +10,14 @@ use microbit::{
     board::Board,
     display::nonblocking::{Display, GreyscaleImage},
     gpio::MicrophonePins,
+    hal::prelude::*,
     hal::{
-        prelude::*,
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
         saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc,
     },
-    pac::{self, Interrupt, interrupt, TIMER1},
+    pac::{self, interrupt, Interrupt, TIMER1},
 };
 use nb::Error;
 use num_complex::Complex;
@@ -33,13 +33,7 @@ use microfft::real::rfft_64 as rfft;
 // 10 bits. See also below.
 const ADC_MAX: usize = 512;
 
-const BANDS: [(usize, usize); 5] = [
-    (1, 2),
-    (2, 3),
-    (3, 4),
-    (4, 7),
-    (8, 20),
-];
+const BANDS: [(usize, usize); 5] = [(1, 2), (2, 3), (3, 4), (4, 7), (8, 20)];
 
 static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
 
@@ -73,7 +67,7 @@ impl Microphone {
 
     fn read(&mut self) -> Result<[i16; FFT_WIDTH], Error<()>> {
         let mut result = [0; FFT_WIDTH];
-        #[cfg(feature="defmt-trace")]
+        #[cfg(feature = "defmt-trace")]
         rprint!("starting read...");
 
         #[cfg(feature = "adc-multiread")]
@@ -84,7 +78,7 @@ impl Microphone {
             *r = self.saadc.read(&mut self.mic_in)?;
         }
 
-        #[cfg(feature="defmt-trace")]
+        #[cfg(feature = "defmt-trace")]
         rprintln!("read complete");
         Ok(result)
     }
@@ -102,7 +96,7 @@ fn TIMER1() {
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
-    #[cfg(feature="defmt-trace")]
+    #[cfg(feature = "defmt-trace")]
     rprintln!("starting...");
     let mut board = Board::take().expect("board?");
 
@@ -139,25 +133,22 @@ fn main() -> ! {
         }
 
         let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
-        let bandvals = BANDS
-            .into_iter()
-            .map(|(start, end)| {
-                freqs[start..end]
-                    .iter()
-                    .map(|&f| {
-                        let p = f.norm() / FFT_WIDTH as f32;
-                        const MIN_DB: NotNan<f32> =
-                            unsafe { NotNan::new_unchecked(-120.0) };
-                        NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB)
-                    })
-                    .max()
-                    .unwrap()
-                    .into_inner()
-            });
+        let bandvals = BANDS.into_iter().map(|(start, end)| {
+            freqs[start..end]
+                .iter()
+                .map(|&f| {
+                    let p = f.norm() / FFT_WIDTH as f32;
+                    const MIN_DB: NotNan<f32> = unsafe { NotNan::new_unchecked(-120.0) };
+                    NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB)
+                })
+                .max()
+                .unwrap()
+                .into_inner()
+        });
 
         for (f, power) in bandvals.enumerate() {
             for (a, row) in led_display.iter_mut().enumerate() {
-                let threshold =  -3.0 * a as f32 - 50.0;
+                let threshold = -3.0 * a as f32 - 50.0;
                 let light = power - threshold;
                 row[f] = light.clamp(0.0, 9.0) as u8;
             }
