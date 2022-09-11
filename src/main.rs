@@ -1,11 +1,8 @@
 #![no_std]
 #![no_main]
 
-use core::cell::RefCell;
-use core::f32::consts::PI;
+use rtic::app;
 
-use cortex_m::interrupt::Mutex;
-use cortex_m_rt::entry;
 #[cfg(not(feature = "adc-multiread"))]
 use microbit::hal::prelude::*;
 use microbit::{
@@ -13,12 +10,14 @@ use microbit::{
     display::nonblocking::{Display, GreyscaleImage},
     gpio::MicrophonePins,
     hal::{
+        clocks::Clocks,
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
+        rtc::{Rtc, RtcInterrupt},
         saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc,
     },
-    pac::{self, interrupt, Interrupt, TIMER1},
+    pac::{Interrupt, TIMER1},
 };
 use nb::Error;
 use num_complex::Complex;
@@ -34,12 +33,11 @@ use microfft::real::rfft_64 as rfft;
 const FFTS_PER_SAMPLE: usize = 16;
 // 10 bits. See also below.
 const ADC_MAX: usize = 512;
+const FRAME_RATE: usize = 30;
 
 const BANDS: [(usize, usize); 5] = [(1, 2), (2, 3), (3, 4), (4, 7), (8, 20)];
 
-static DISPLAY: Mutex<RefCell<Option<Display<TIMER1>>>> = Mutex::new(RefCell::new(None));
-
-struct Microphone {
+pub struct Microphone {
     saadc: Saadc,
     mic_in: P0_05<Input<Floating>>,
 }
@@ -86,87 +84,112 @@ impl Microphone {
     }
 }
 
-#[interrupt]
-fn TIMER1() {
-    cortex_m::interrupt::free(|cs| {
-        if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
-            display.handle_display_event();
-        }
-    });
-}
+#[app(device=microbit::pac, peripherals=true)]
+mod app {
+    use super::*;
 
-#[entry]
-fn main() -> ! {
-    rtt_init_print!();
-    #[cfg(feature = "defmt-trace")]
-    rprintln!("starting...");
-    let mut board = Board::take().expect("board?");
-
-    let mut mic = Microphone::new(board.SAADC, board.microphone_pins);
-
-    let display = Display::new(board.TIMER1, board.display_pins);
-    cortex_m::interrupt::free(move |cs| {
-        *DISPLAY.borrow(cs).borrow_mut() = Some(display);
-    });
-    unsafe {
-        board.NVIC.set_priority(Interrupt::TIMER1, 128);
-        pac::NVIC::unmask(Interrupt::TIMER1);
+    #[shared]
+    struct Shared {
+        display: Display<TIMER1>,
     }
 
-    let mut led_display = [[0; 5]; 5];
-    let mut sample_buf = [0.0f32; FFT_WIDTH];
-    let mut dc = 0.0f32;
-    let mut peak = 0.0f32;
-    let mut window = [0.0f32; FFT_WIDTH];
-    // Use a Hann window, which is easy to compute and reasonably good.
-    for (n, w) in window.iter_mut().enumerate() {
-        let s = f32::sin(PI * n as f32 / (FFT_WIDTH - 1) as f32);
-        *w = s * s;
+    #[local]
+    struct Local {
+        mic: Microphone,
+        dc: f32,
+        peak: f32,
+        window: [f32; FFT_WIDTH],
     }
 
-    const MIN_DB: f32 = -120.0;
-    const MIN_DB_NOT_NAN: NotNan<f32> = unsafe { NotNan::new_unchecked(MIN_DB) };
-    loop {
-        let mut bandpowers = [MIN_DB; BANDS.len()];
-        for _ in 0..FFTS_PER_SAMPLE {
-            let samples = mic.read().expect("mic?");
-            for (i, s) in sample_buf.iter_mut().enumerate() {
-                let sample = samples[i] as f32 / ADC_MAX as f32;
-                dc = (7.0 * dc + sample) / 8.0;
-                let sample = sample - dc;
-                peak = peak.max(sample.abs());
-                *s = sample * window[i] / peak;
+    #[task(binds = TIMER1, shared = [display], priority = 8)]
+    fn timer1(mut cx: timer1::Context) {
+        cx.shared.display.lock(|display| display.handle_display_event());
+    }
+
+    #[task(binds = RTC0, priority = 1, shared = [display], local = [mic, dc, peak, window])]
+    fn spectrum(mut cx: spectrum::Context) {
+        const MIN_DB: f32 = -120.0;
+        const MIN_DB_NOT_NAN: NotNan<f32> = unsafe { NotNan::new_unchecked(MIN_DB) };
+        loop {
+            let mut bandpowers = [MIN_DB; BANDS.len()];
+            for _ in 0..FFTS_PER_SAMPLE {
+                let cx = &mut cx.local;
+                let samples = cx.mic.read().expect("mic?");
+                let mut sample_buf = [0.0f32; FFT_WIDTH];
+                for (i, s) in sample_buf.iter_mut().enumerate() {
+                    let sample = samples[i] as f32 / ADC_MAX as f32;
+                    *cx.dc = (7.0 * *cx.dc + sample) / 8.0;
+                    let sample = sample - *cx.dc;
+                    *cx.peak = cx.peak.max(sample.abs());
+                    *s = sample * cx.window[i] / *cx.peak;
+                }
+
+                let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
+                let bandvals = BANDS.into_iter().map(|(start, end)| {
+                    freqs[start..end]
+                        .iter()
+                        .map(|&f| {
+                            let p = f.norm() / FFT_WIDTH as f32;
+                            NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB_NOT_NAN)
+                        })
+                        .max()
+                        .unwrap()
+                        .into_inner()
+                });
+                for (bp, bv) in bandpowers.iter_mut().zip(bandvals) {
+                    *bp = bp.max(bv);
+                }
             }
 
-            let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
-            let bandvals = BANDS.into_iter().map(|(start, end)| {
-                freqs[start..end]
-                    .iter()
-                    .map(|&f| {
-                        let p = f.norm() / FFT_WIDTH as f32;
-                        NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB_NOT_NAN)
-                    })
-                    .max()
-                    .unwrap()
-                    .into_inner()
-            });
-            for (bp, bv) in bandpowers.iter_mut().zip(bandvals) {
-                *bp = bp.max(bv);
+            let mut led_display = [[0; 5]; 5];
+            for (f, power) in bandpowers.iter().enumerate() {
+                for (a, row) in led_display.iter_mut().enumerate() {
+                    let threshold = -3.0 * a as f32 - 45.0;
+                    let light = 3.0 * (power - threshold);
+                    row[f] = light.clamp(0.0, 9.0) as u8;
+                }
             }
+
+            cx.shared.display.lock(|display| display.show(&GreyscaleImage::new(&led_display)));
+        }
+    }
+
+    #[init]
+    fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
+        use core::f32::consts::PI;
+
+        rtt_init_print!();
+        #[cfg(feature = "defmt-trace")]
+        rprintln!("starting...");
+
+        let board = Board::new(cx.device, cx.core);
+        // Starting the low-frequency clock (needed for RTC to work)
+        Clocks::new(board.CLOCK).start_lfclk();
+        // Default RTC at about 29.98Hz (32_768 / (1092 + 1))
+        // about 33.4ms period
+        const FRAME_TIME: u32 = 32768 / FRAME_RATE as u32 - 1;
+        let mut rtc0 = Rtc::new(board.RTC0, FRAME_TIME).unwrap();
+        rtc0.enable_event(RtcInterrupt::Tick);
+        rtc0.enable_interrupt(RtcInterrupt::Tick, None);
+        rtc0.enable_counter();
+
+        let display = Display::new(board.TIMER1, board.display_pins);
+        rtic::pend(Interrupt::TIMER1);
+
+        let shared = Shared { display };
+
+        let mic = Microphone::new(board.SAADC, board.microphone_pins);
+        let dc = 0.0f32;
+        let peak = 0.0f32;
+        let mut window = [0.0f32; FFT_WIDTH];
+        // Use a Hann window, which is easy to compute and reasonably good.
+        for (n, w) in window.iter_mut().enumerate() {
+            let s = f32::sin(PI * n as f32 / (FFT_WIDTH - 1) as f32);
+            *w = s * s;
         }
 
-        for (f, power) in bandpowers.iter().enumerate() {
-            for (a, row) in led_display.iter_mut().enumerate() {
-                let threshold = -3.0 * a as f32 - 45.0;
-                let light = 3.0 * (power - threshold);
-                row[f] = light.clamp(0.0, 9.0) as u8;
-            }
-        }
+        let local = Local { mic, dc, peak, window };
 
-        cortex_m::interrupt::free(|cs| {
-            if let Some(display) = DISPLAY.borrow(cs).borrow_mut().as_mut() {
-                display.show(&GreyscaleImage::new(&led_display));
-            }
-        });
+        (shared, local, init::Monotonics())
     }
 }
