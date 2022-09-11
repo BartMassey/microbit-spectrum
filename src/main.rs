@@ -96,8 +96,6 @@ mod app {
     #[local]
     struct Local {
         mic: Microphone,
-        dc: f32,
-        peak: f32,
         window: [f32; FFT_WIDTH],
     }
 
@@ -106,10 +104,12 @@ mod app {
         cx.shared.display.lock(|display| display.handle_display_event());
     }
 
-    #[task(binds = RTC0, priority = 1, shared = [display], local = [mic, dc, peak, window])]
+    #[task(binds = RTC0, priority = 1, shared = [display], local = [mic, window])]
     fn spectrum(mut cx: spectrum::Context) {
         const MIN_DB: f32 = -120.0;
-        const MIN_DB_NOT_NAN: NotNan<f32> = unsafe { NotNan::new_unchecked(MIN_DB) };
+        const fn nn(f: f32) -> NotNan<f32> {
+            unsafe { NotNan::new_unchecked(f) }
+        }
         loop {
             let mut bandpowers = [MIN_DB; BANDS.len()];
             for _ in 0..FFTS_PER_SAMPLE {
@@ -117,11 +117,12 @@ mod app {
                 let samples = cx.mic.read().expect("mic?");
                 let mut sample_buf = [0.0f32; FFT_WIDTH];
                 for (i, s) in sample_buf.iter_mut().enumerate() {
-                    let sample = samples[i] as f32 / ADC_MAX as f32;
-                    *cx.dc = (7.0 * *cx.dc + sample) / 8.0;
-                    let sample = sample - *cx.dc;
-                    *cx.peak = cx.peak.max(sample.abs());
-                    *s = sample * cx.window[i] / *cx.peak;
+                    *s = samples[i].abs() as f32 / ADC_MAX as f32;
+                }
+                let dc = sample_buf.iter().copied().sum::<f32>() / sample_buf.len() as f32;
+                let peak = sample_buf.iter().copied().map(nn).max().unwrap().into_inner();
+                for (i, s) in sample_buf.iter_mut().enumerate() {
+                    *s = cx.window[i] * (*s - dc) / peak;
                 }
 
                 let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
@@ -130,7 +131,7 @@ mod app {
                         .iter()
                         .map(|&f| {
                             let p = f.norm() / FFT_WIDTH as f32;
-                            NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB_NOT_NAN)
+                            NotNan::new(20.0 * p.log10()).unwrap_or(nn(MIN_DB))
                         })
                         .max()
                         .unwrap()
@@ -179,8 +180,6 @@ mod app {
         let shared = Shared { display };
 
         let mic = Microphone::new(board.SAADC, board.microphone_pins);
-        let dc = 0.0f32;
-        let peak = 0.0f32;
         let mut window = [0.0f32; FFT_WIDTH];
         // Use a Hann window, which is easy to compute and reasonably good.
         for (n, w) in window.iter_mut().enumerate() {
@@ -188,7 +187,7 @@ mod app {
             *w = s * s;
         }
 
-        let local = Local { mic, dc, peak, window };
+        let local = Local { mic, window };
 
         (shared, local, init::Monotonics())
     }
