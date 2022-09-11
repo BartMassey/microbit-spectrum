@@ -47,14 +47,13 @@ features = ["size-64"]
 
 [features]
 
-default = ["defmt-default", "adc-multiread"]
+default = ["adc-multiread"]
 
-# do NOT modify these features
-defmt-default = []
-defmt-trace = []
-defmt-debug = []
-defmt-info = []
-defmt-warn = []
-defmt-error = []
+defmt-print = []
+defmt-trace = ["defmt-print"]
+#defmt-debug = ["defmt-print"]
+#defmt-info = ["defmt-print"]
+#defmt-warn = ["defmt-print"]
+#defmt-error = ["defmt-print"]
 
 adc-multiread = []

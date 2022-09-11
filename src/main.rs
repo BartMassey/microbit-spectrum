@@ -25,7 +25,7 @@ use num_traits::Float;
 use ordered_float::NotNan;
 use panic_rtt_target as _;
 use rtt_target::rtt_init_print;
-#[cfg(not(feature = "defmt-default"))]
+#[cfg(feature = "defmt-print")]
 use rtt_target::{rprint, rprintln};
 
 const FFT_WIDTH: usize = 64;
