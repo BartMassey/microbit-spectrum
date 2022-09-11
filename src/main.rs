@@ -6,7 +6,6 @@ use core::f32::consts::PI;
 
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
-#[cfg(not(feature = "adc-multiread"))]
 use microbit::hal::prelude::*;
 use microbit::{
     board::Board,
@@ -20,10 +19,6 @@ use microbit::{
     },
     pac::{self, interrupt, Interrupt, TIMER1},
 };
-#[cfg(feature = "adc-multiread")]
-use microbit_local as microbit;
-#[cfg(not(feature = "adc-multiread"))]
-use microbit_std as microbit;
 use nb::Error;
 use num_complex::Complex;
 use num_traits::Float;
