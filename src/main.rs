@@ -33,7 +33,7 @@ use microfft::real::rfft_64 as rfft;
 const FFTS_PER_SAMPLE: usize = 16;
 // 10 bits. See also below.
 const ADC_MAX: usize = 512;
-const FRAME_RATE: usize = 30;
+const FRAME_RATE: usize = 10;
 
 const BANDS: [(usize, usize); 5] = [(1, 2), (2, 3), (3, 4), (4, 7), (8, 20)];
 
@@ -144,7 +144,7 @@ mod app {
             let mut led_display = [[0; 5]; 5];
             for (f, power) in bandpowers.iter().enumerate() {
                 for (a, row) in led_display.iter_mut().enumerate() {
-                    let threshold = -3.0 * a as f32 - 45.0;
+                    let threshold = -3.0 * a as f32 - 40.0;
                     let light = 3.0 * (power - threshold);
                     row[f] = light.clamp(0.0, 9.0) as u8;
                 }
