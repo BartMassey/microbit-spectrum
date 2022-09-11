@@ -52,8 +52,8 @@ const ADC_MAX: usize = 512;
 
 /// Display rate in frames per second. Cannot be too slow,
 /// lest hardware overflow. Cannot be too fast, lest display
-/// fail to go.  10-30FPS is known to work.
-const FRAME_RATE: usize = 10;
+/// fail to go. 10-30FPS is known to work.
+const FRAME_RATE: usize = 20;
 
 /// FFT bins to accumulate over for each of the five bars. Each range is
 /// an integer interval [l,u).
