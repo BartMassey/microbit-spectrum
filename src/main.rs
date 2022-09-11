@@ -6,7 +6,7 @@ use core::f32::consts::PI;
 
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
-use embedded_hal::blocking::delay::DelayMs;
+#[cfg(not(feature = "adc-multiread"))]
 use microbit::hal::prelude::*;
 use microbit::{
     board::Board,
@@ -17,7 +17,6 @@ use microbit::{
         pac::SAADC,
         saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc,
-        timer::Timer,
     },
     pac::{self, interrupt, Interrupt, TIMER1},
 };
@@ -32,6 +31,7 @@ use rtt_target::{rprint, rprintln};
 
 const FFT_WIDTH: usize = 64;
 use microfft::real::rfft_64 as rfft;
+const FFTS_PER_SAMPLE: usize = 16;
 // 10 bits. See also below.
 const ADC_MAX: usize = 512;
 
@@ -102,8 +102,6 @@ fn main() -> ! {
     rprintln!("starting...");
     let mut board = Board::take().expect("board?");
 
-    let mut timer = Timer::new(board.TIMER4);
-
     let mut mic = Microphone::new(board.SAADC, board.microphone_pins);
 
     let display = Display::new(board.TIMER1, board.display_pins);
@@ -126,34 +124,41 @@ fn main() -> ! {
         *w = s * s;
     }
 
+    const MIN_DB: f32 = -120.0;
+    const MIN_DB_NOT_NAN: NotNan<f32> = unsafe { NotNan::new_unchecked(MIN_DB) };
     loop {
-        let samples = mic.read().expect("mic?");
-        for (i, s) in sample_buf.iter_mut().enumerate() {
-            let sample = samples[i] as f32 / ADC_MAX as f32;
-            dc = (7.0 * dc + sample) / 8.0;
-            let sample = sample - dc;
-            peak = peak.max(sample.abs());
-            *s = sample * window[i] / peak;
+        let mut bandpowers = [MIN_DB; BANDS.len()];
+        for _ in 0..FFTS_PER_SAMPLE {
+            let samples = mic.read().expect("mic?");
+            for (i, s) in sample_buf.iter_mut().enumerate() {
+                let sample = samples[i] as f32 / ADC_MAX as f32;
+                dc = (7.0 * dc + sample) / 8.0;
+                let sample = sample - dc;
+                peak = peak.max(sample.abs());
+                *s = sample * window[i] / peak;
+            }
+
+            let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
+            let bandvals = BANDS.into_iter().map(|(start, end)| {
+                freqs[start..end]
+                    .iter()
+                    .map(|&f| {
+                        let p = f.norm() / FFT_WIDTH as f32;
+                        NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB_NOT_NAN)
+                    })
+                    .max()
+                    .unwrap()
+                    .into_inner()
+            });
+            for (bp, bv) in bandpowers.iter_mut().zip(bandvals) {
+                *bp = bp.max(bv);
+            }
         }
 
-        let freqs: &mut [Complex<f32>; FFT_WIDTH / 2] = rfft(&mut sample_buf);
-        let bandvals = BANDS.into_iter().map(|(start, end)| {
-            freqs[start..end]
-                .iter()
-                .map(|&f| {
-                    let p = f.norm() / FFT_WIDTH as f32;
-                    const MIN_DB: NotNan<f32> = unsafe { NotNan::new_unchecked(-120.0) };
-                    NotNan::new(20.0 * p.log10()).unwrap_or(MIN_DB)
-                })
-                .max()
-                .unwrap()
-                .into_inner()
-        });
-
-        for (f, power) in bandvals.enumerate() {
+        for (f, power) in bandpowers.iter().enumerate() {
             for (a, row) in led_display.iter_mut().enumerate() {
-                let threshold = -3.0 * a as f32 - 50.0;
-                let light = power - threshold;
+                let threshold = -3.0 * a as f32 - 45.0;
+                let light = 3.0 * (power - threshold);
                 row[f] = light.clamp(0.0, 9.0) as u8;
             }
         }
@@ -163,7 +168,5 @@ fn main() -> ! {
                 display.show(&GreyscaleImage::new(&led_display));
             }
         });
-
-        timer.delay_ms(500_u16);
     }
 }

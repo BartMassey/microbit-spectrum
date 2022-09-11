@@ -3,8 +3,18 @@ Bart Massey 2022
 
 This Rust app for the BBC micro:bit v2 uses its microphone
 to listen and displays spectral power. The spectral bars are
-set to cover five arbitrarily-chosen bands. The bar height
-is dB in unspecified units of audio power, with an offset.
+set to cover five arbitrarily-chosen bands, with band centers
+very approximately at these frequencies in Hz:
+
+    530
+    888
+    1240
+    1950
+    4970
+
+The bar height is dB in unspecified units of audio
+power. Each bar position is 3dB, with the bar starting at
+45dB.
 
 ## Build and Run
 
@@ -35,4 +45,5 @@ terms.
 
 The hardware-using code and build infrastructure here were
 heavily derived from the examples in the amazing `microbit`
-crate. The `microfft` crate is used for FFT.
+crate. The `microfft` crate is used for the FFT, and works
+well.
