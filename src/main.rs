@@ -6,6 +6,7 @@ use core::f32::consts::PI;
 
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
+use embedded_hal::blocking::delay::DelayMs;
 use microbit::hal::prelude::*;
 use microbit::{
     board::Board,
@@ -16,6 +17,7 @@ use microbit::{
         pac::SAADC,
         saadc::{Oversample, Resolution, SaadcConfig, Time},
         Saadc,
+        timer::Timer,
     },
     pac::{self, interrupt, Interrupt, TIMER1},
 };
@@ -100,6 +102,8 @@ fn main() -> ! {
     rprintln!("starting...");
     let mut board = Board::take().expect("board?");
 
+    let mut timer = Timer::new(board.TIMER4);
+
     let mut mic = Microphone::new(board.SAADC, board.microphone_pins);
 
     let display = Display::new(board.TIMER1, board.display_pins);
@@ -159,5 +163,7 @@ fn main() -> ! {
                 display.show(&GreyscaleImage::new(&led_display));
             }
         });
+
+        timer.delay_ms(500_u16);
     }
 }
