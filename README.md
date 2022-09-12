@@ -16,6 +16,8 @@ The bar height is dB in unspecified units of audio
 power. Each bar position is 3dB, with the bar starting at
 45dB.
 
+Here's a brief YouTube [demo video](https://youtu.be/ALQst9l_nb0).
+
 ## Build and Run
 
 You can follow the instructions from the embedded micro:bit
