@@ -35,6 +35,12 @@ on the `microbit` crate
 Note that this app requires `--release` to work properly:
 the FFT is just too slow otherwise.
 
+You can turn on debugging via for example
+
+    cargo embed --release --no-default-features --features=defmt-trace,adc-multiread
+
+See the `Cargo.toml` for the full setup.
+
 ## License
 
 This work is made available under the "MIT License". Please
