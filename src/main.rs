@@ -135,13 +135,13 @@ mod app {
     }
 
     /// Refreshing the display is high-priority and outside our control.
-    #[task(binds = TIMER1, shared = [display], priority = 8)]
+    #[task(binds = TIMER1, shared = [display], priority = 2)]
     fn timer1(mut cx: timer1::Context) {
         cx.shared.display.lock(|display| display.handle_display_event());
     }
 
     /// Where the real work happens.
-    #[task(binds = RTC0, priority = 1, shared = [display], local = [mic, window])]
+    #[task(binds = RTC0, shared = [display], local = [mic, window])]
     fn spectrum(mut cx: spectrum::Context) {
         // Need a small non-zero number of dB to treat as a pseudo-floor.
         const MIN_DB: f32 = -120.0;
