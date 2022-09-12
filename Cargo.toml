@@ -59,7 +59,7 @@ features = ["size-64"]
 default = ["adc-multiread", "panic-halt"]
 
 adc-multiread = []
-defmt = []
+defmt = ["defmt-rtt", "rtt-target", "panic-rtt-target"]
 
 defmt-default = []
 defmt-trace = ["defmt"]

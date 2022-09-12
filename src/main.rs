@@ -209,6 +209,8 @@ mod app {
         rprintln!("starting...");
 
         let board = Board::new(cx.device, cx.core);
+        #[cfg(not(feature = "defmt"))]
+        let mut board = board;
 
         // Set up the RTC interrupt.  First, start the
         // low-frequency clock (needed for RTC to work)
@@ -240,6 +242,28 @@ mod app {
 
         let local = Local { mic, window };
 
+        #[cfg(not(feature = "defmt"))]
+        {
+            // Set the ARM SLEEPONEXIT bit to go to sleep after handling interrupts
+            // See https://developer.arm.com/docs/100737/0100/power-management/
+            //   sleep-mode/sleep-on-exit-bit
+            board.SCB.set_sleepdeep();
+        }
+
         (shared, local, init::Monotonics())
+    }
+
+    #[idle]
+    fn idle(_cx: idle::Context) -> ! {
+        #[allow(clippy::empty_loop)]
+        loop {
+            // Wait For Interrupt is used instead of a
+            // busy-wait loop to allow MCU to sleep between
+            // interrupts
+            // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/
+            //   Instruction-Details/Alphabetical-list-of-instructions/WFI
+            #[cfg(not(feature = "defmt"))]
+            rtic::export::wfi()
+        }
     }
 }
