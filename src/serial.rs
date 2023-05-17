@@ -59,9 +59,9 @@ impl<T: Instance> serial::Read<u8> for UartePort<T> {
     }
 }
 
-pub fn try_me<T: Instance>(serial: &mut UartePort<T>) {
+pub fn ding<T: Instance>(serial: &mut UartePort<T>, count: u64) {
     use core::fmt::Write;
     use embedded_hal::prelude::_embedded_hal_serial_Write;
-    write!(serial, "The quick brown fox jumps over the lazy dog.\r\n").unwrap();
+    write!(serial, "ding: {}\r\n", count).unwrap();
     nb::block!(serial.flush()).unwrap();
 }

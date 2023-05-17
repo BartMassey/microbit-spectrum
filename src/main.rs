@@ -125,6 +125,7 @@ mod app {
         mic: Microphone,
         /// The window modifies the input samples to the FFT.
         window: [f32; FFT_WIDTH],
+        cycle: u64,
     }
 
     /// Refreshing the display is high-priority and outside our control.
@@ -134,7 +135,7 @@ mod app {
     }
 
     /// Where the real work happens.
-    #[task(binds = RTC0, shared = [display, serial], local = [mic, window])]
+    #[task(binds = RTC0, shared = [display, serial], local = [mic, window, cycle])]
     fn spectrum(mut cx: spectrum::Context) {
         // Need a small non-zero number of dB to treat as a pseudo-floor.
         const MIN_DB: f32 = -120.0;
@@ -143,7 +144,10 @@ mod app {
             unsafe { NotNan::new_unchecked(f) }
         }
 
-        cx.shared.serial.lock(|serial| try_me(serial));
+        if *cx.local.cycle % 100 == 0 {
+            cx.shared.serial.lock(|serial| ding(serial, *cx.local.cycle));
+        }
+        *cx.local.cycle = (*cx.local.cycle + 1) % 1_000_000;
 
         // Accumulated power information for this cycle.
         let mut bandpowers = [MIN_DB; BANDS.len()];
@@ -238,7 +242,7 @@ mod app {
             *w = s * s;
         }
 
-        let local = Local { mic, window };
+        let local = Local { mic, window, cycle: 0 };
 
         #[cfg(not(feature = "defmt"))]
         {
