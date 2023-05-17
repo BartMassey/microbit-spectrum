@@ -5,6 +5,9 @@
 #![no_std]
 #![no_main]
 
+mod serial;
+use serial::*;
+
 /// This is an RTIC app.
 use rtic::app;
 
@@ -124,6 +127,7 @@ mod app {
     struct Shared {
         /// The display is shared between the renderer and the spectrum calc.
         display: Display<TIMER1>,
+        serial: UartePort<UARTE0>,
     }
 
     #[local]
@@ -141,7 +145,7 @@ mod app {
     }
 
     /// Where the real work happens.
-    #[task(binds = RTC0, shared = [display], local = [mic, window])]
+    #[task(binds = RTC0, shared = [display, serial], local = [mic, window])]
     fn spectrum(mut cx: spectrum::Context) {
         // Need a small non-zero number of dB to treat as a pseudo-floor.
         const MIN_DB: f32 = -120.0;
@@ -149,6 +153,8 @@ mod app {
         const fn nn(f: f32) -> NotNan<f32> {
             unsafe { NotNan::new_unchecked(f) }
         }
+
+        cx.shared.serial.lock(|serial| try_me(serial));
 
         // Accumulated power information for this cycle.
         let mut bandpowers = [MIN_DB; BANDS.len()];
@@ -227,7 +233,10 @@ mod app {
         let display = Display::new(board.TIMER1, board.display_pins);
         rtic::pend(Interrupt::TIMER1);
 
-        let shared = Shared { display };
+        // Get the serial port.
+        let serial = serial(board.UARTE0, board.uart);
+
+        let shared = Shared { display, serial };
 
         // Turn the microphone on.
         let mic = Microphone::new(board.SAADC, board.microphone_pins);
