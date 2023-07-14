@@ -6,7 +6,7 @@
 #![no_main]
 
 mod serial;
-use serial::*;
+use serial::{serial, UartePort, UARTE0, ding};
 
 /// This is an RTIC app.
 use rtic::app;
