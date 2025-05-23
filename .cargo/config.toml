@@ -1,13 +1,9 @@
-[alias]
-xtask = "run --package xtask --"
-
 [build]
 target = "thumbv7em-none-eabihf"
 
-# For micro:bit v2
 [target.thumbv7em-none-eabihf]
-runner = "probe-run --chip nRF52833_xxAA"
+runner = "probe-rs run --chip nRF52833_xxAA"
 rustflags = [
-  "-C", "linker=flip-link",
+  "-C", "linker=rust-lld",
   "-C", "link-arg=-Tlink.x",
 ]

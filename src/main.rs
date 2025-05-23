@@ -8,11 +8,6 @@
 /// This is an RTIC app.
 use rtic::app;
 
-/// There must be some better way to get at this trait with
-/// a better name and place.
-#[cfg(not(feature = "adc-multiread"))]
-use microbit::hal::prelude::_embedded_hal_adc_OneShot;
-
 use microbit::{
     board::Board,
     display::nonblocking::{Display, GreyscaleImage},
@@ -99,14 +94,8 @@ impl Microphone {
         #[cfg(feature = "defmt-trace")]
         rprint!("starting read...");
 
-        // For multiread, just have all the samples read in one go.
-        #[cfg(feature = "adc-multiread")]
-        self.saadc.read_mut(&mut self.mic_in, &mut result)?;
-
-        // For non-multiread, have them read one at a time.
-        #[cfg(not(feature = "adc-multiread"))]
         for r in &mut result {
-            *r = self.saadc.read(&mut self.mic_in)?;
+            *r = self.saadc.read_channel(&mut self.mic_in)?;
         }
 
         // All done.
@@ -230,7 +219,7 @@ mod app {
         let shared = Shared { display };
 
         // Turn the microphone on.
-        let mic = Microphone::new(board.SAADC, board.microphone_pins);
+        let mic = Microphone::new(board.ADC, board.microphone_pins);
 
         // Compute the FFT window.
         let mut window = [0.0f32; FFT_WIDTH];
