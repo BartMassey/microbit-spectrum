@@ -5,8 +5,11 @@
 #![no_std]
 #![no_main]
 
+mod saadc;
 mod serial;
-use serial::{serial, UartePort, UARTE0, ding};
+
+use saadc::{Saadc, Oversample, Resolution, SaadcConfig, Time};
+use serial::{serial, UartePort, ding};
 
 /// This is an RTIC app.
 use rtic::app;
@@ -20,23 +23,23 @@ use microbit::{
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
         rtc::{Rtc, RtcInterrupt},
-        saadc::{Oversample, Resolution, SaadcConfig, Time},
-        Saadc,
     },
-    pac::{Interrupt, TIMER1},
+    pac::{Interrupt, TIMER1, UARTE0},
 };
 use nb::Error;
 use num_complex::Complex;
 use num_traits::Float;
 use ordered_float::NotNan;
 
-#[cfg(feature = "defmt")]
+#[cfg(not(feature = "panic-halt"))]
 use panic_rtt_target as _;
-#[cfg(not(feature = "defmt"))]
+#[cfg(feature = "panic-halt")]
 use panic_halt as _;
 
-#[cfg(feature = "defmt")]
-use rtt_target::{rtt_init_print, rprint, rprintln};
+#[cfg(not(feature = "panic-halt"))]
+use rtt_target::rtt_init_print;
+#[cfg(feature = "trace")]
+use rtt_target::{rprint, rprintln};
 
 /// FFT input width in samples. Output is half this width + 1 for DC.
 const FFT_WIDTH: usize = 64;
@@ -94,15 +97,21 @@ impl Microphone {
     fn read(&mut self) -> Result<[i16; FFT_WIDTH], Error<()>> {
         // Setup.
         let mut result = [0; FFT_WIDTH];
-        #[cfg(feature = "defmt-trace")]
+        #[cfg(feature = "trace")]
         rprint!("starting read...");
 
+        // For multiread, just have all the samples read in one go.
+        #[cfg(feature = "adc-multiread")]
+        self.saadc.read_channel_mut(&mut self.mic_in, &mut result)?;
+
+        // For non-multiread, have them read one at a time.
+        #[cfg(not(feature = "adc-multiread"))]
         for r in &mut result {
             *r = self.saadc.read_channel(&mut self.mic_in)?;
         }
 
         // All done.
-        #[cfg(feature = "defmt-trace")]
+        #[cfg(feature = "trace")]
         rprintln!("read complete");
         Ok(result)
     }
@@ -202,13 +211,13 @@ mod app {
         use core::f32::consts::PI;
 
         // Display debugging info if enabled.
-        #[cfg(feature = "defmt")]
+        #[cfg(not(feature = "panic-halt"))]
         rtt_init_print!();
-        #[cfg(feature = "defmt-trace")]
+        #[cfg(feature = "trace")]
         rprintln!("starting...");
 
         let board = Board::new(cx.device, cx.core);
-        #[cfg(not(feature = "defmt"))]
+        #[cfg(feature = "deep-sleep")]
         let mut board = board;
 
         // Set up the RTC interrupt.  First, start the
@@ -244,7 +253,7 @@ mod app {
 
         let local = Local { mic, window, cycle: 0 };
 
-        #[cfg(not(feature = "defmt"))]
+        #[cfg(feature = "deep-sleep")]
         {
             // Set the ARM SLEEPONEXIT bit to go to sleep after handling interrupts
             // See https://developer.arm.com/docs/100737/0100/power-management/
@@ -264,7 +273,7 @@ mod app {
             // interrupts
             // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/
             //   Instruction-Details/Alphabetical-list-of-instructions/WFI
-            #[cfg(not(feature = "defmt"))]
+            #[cfg(not(feature = "deep-sleep"))]
             rtic::export::wfi()
         }
     }
