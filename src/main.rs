@@ -5,8 +5,11 @@
 #![no_std]
 #![no_main]
 
+mod saadc;
 mod serial;
-use serial::{serial, UartePort, UARTE0, ding};
+
+use saadc::{Saadc, Oversample, Resolution, SaadcConfig, Time};
+use serial::{serial, UartePort, ding};
 
 /// This is an RTIC app.
 use rtic::app;
@@ -25,10 +28,8 @@ use microbit::{
         gpio::{p0::P0_05, Floating, Input, Level, OpenDrainConfig},
         pac::SAADC,
         rtc::{Rtc, RtcInterrupt},
-        saadc::{Oversample, Resolution, SaadcConfig, Time},
-        Saadc,
     },
-    pac::{Interrupt, TIMER1},
+    pac::{Interrupt, TIMER1, UARTE0},
 };
 use nb::Error;
 use num_complex::Complex;
@@ -104,7 +105,7 @@ impl Microphone {
 
         // For multiread, just have all the samples read in one go.
         #[cfg(feature = "adc-multiread")]
-        self.saadc.read_mut(&mut self.mic_in, &mut result)?;
+        self.saadc.read_channel_mut(&mut self.mic_in, &mut result)?;
 
         // For non-multiread, have them read one at a time.
         #[cfg(not(feature = "adc-multiread"))]
@@ -243,7 +244,7 @@ mod app {
         let shared = Shared { display, serial };
 
         // Turn the microphone on.
-        let mic = Microphone::new(board.SAADC, board.microphone_pins);
+        let mic = Microphone::new(board.ADC, board.microphone_pins);
 
         // Compute the FFT window.
         let mut window = [0.0f32; FFT_WIDTH];

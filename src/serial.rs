@@ -1,11 +1,14 @@
+use core::fmt::Write as FWrite;
+use embedded_io::{Read as ERead, Write as EWrite, ReadExactError};
 use microbit::{
-    hal::uarte::{self, Baudrate, Parity, Error, Instance, Uarte, UarteRx, UarteTx},
+    hal::uarte::{
+        self, Baudrate, Error as UError, Parity, Instance,
+        Uarte, UarteRx, UarteTx
+    },
+    pac::UARTE0,
     board::UartPins,
 };
-use embedded_hal::blocking::serial as bserial;
-use embedded_hal::serial;
 
-pub use microbit::hal::pac::UARTE0;
 
 pub fn serial(uarte0: UARTE0, uart: UartPins) -> UartePort<UARTE0> {
     let serial = uarte::Uarte::new(
@@ -24,44 +27,39 @@ pub struct UartePort<T: Instance>(UarteTx<T>, UarteRx<T>);
 
 impl<T: Instance> UartePort<T> {
     pub fn new(serial: Uarte<T>) -> UartePort<T> {
+        #[allow(static_mut_refs)]
         let (tx, rx) = serial
             .split(unsafe { &mut TX_BUF }, unsafe { &mut RX_BUF })
             .unwrap();
         UartePort(tx, rx)
     }
-}
 
-impl<T: Instance> core::fmt::Write for UartePort<T> {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+    pub fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.0.write_str(s)
     }
-}
 
-impl<T: Instance> serial::Write<u8> for UartePort<T> {
-    type Error = Error;
-
-    fn write(&mut self, b: u8) -> nb::Result<(), Self::Error> {
-        self.0.write(b)
+    pub fn write(&mut self, b: u8) -> Result<usize, UError> {
+        self.0.write(&[b])
     }
 
-    fn flush(&mut self) -> nb::Result<(), Self::Error> {
+    pub fn flush(&mut self) -> Result<(), UError> {
         self.0.flush()
     }
+
+    pub fn read(&mut self) -> nb::Result<u8, ReadExactError<UError>> {
+        let mut buf = [0u8];
+        self.1.read_exact(&mut buf)?;
+        Ok(buf[0])
+    }
 }
 
-impl<T: Instance> bserial::write::Default<u8> for UartePort<T> {}
-
-impl<T: Instance> serial::Read<u8> for UartePort<T> {
-    type Error = Error;
-
-    fn read(&mut self) -> nb::Result<u8, Self::Error> {
-        self.1.read()
+impl<T: Instance> FWrite for UartePort<T> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.write_str(s)
     }
 }
 
 pub fn ding<T: Instance>(serial: &mut UartePort<T>, count: u64) {
-    use core::fmt::Write;
-    use embedded_hal::prelude::_embedded_hal_serial_Write;
     write!(serial, "ding: {}\r\n", count).unwrap();
-    nb::block!(serial.flush()).unwrap();
+    serial.flush().unwrap();
 }
